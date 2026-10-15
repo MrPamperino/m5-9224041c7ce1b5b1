@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="robots" content="noindex,nofollow">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wallet 5Mef</title>
+<style>
+  :root {
+    --bg:#0a0a0a; --fg:#f2f2f2; --muted:#888; --line:#222;
+    --up:#3dd68c; --down:#ff6b6b; --card:#121212;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--fg);
+    font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    padding:40px 20px 80px;
+  }
+  .wrap { max-width:860px; margin:0 auto; }
+  a { color:#9ecbff; text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  h1 {
+    font-size:13px; font-weight:500; color:var(--muted);
+    letter-spacing:.08em; text-transform:uppercase; margin:0 0 8px;
+  }
+  .addr {
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:13px; color:var(--muted); margin-bottom:20px; word-break:break-all;
+  }
+  .hero {
+    display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:28px;
+  }
+  @media (max-width:640px) { .hero { grid-template-columns:1fr; } }
+  .card {
+    background:var(--card); border:1px solid var(--line);
+    border-radius:12px; padding:16px 18px;
+  }
+  .lbl { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px; }
+  .val { font-size:26px; font-weight:560; letter-spacing:-.03em; }
+  .hint { color:var(--muted); font-size:12px; margin-top:4px; }
+  .up { color:var(--up); } .down { color:var(--down); }
+  table { width:100%; border-collapse:collapse; }
+  th {
+    text-align:left; font-size:12px; font-weight:500; color:var(--muted);
+    padding:0 8px 10px; border-bottom:1px solid var(--line);
+  }
+  th.r, td.r { text-align:right; }
+  td { padding:14px 8px; border-bottom:1px solid var(--line); font-variant-numeric:tabular-nums; }
+  .name { font-weight:560; }
+  .venue { color:var(--muted); font-size:12px; margin-top:2px; }
+  input {
+    width:96px; background:transparent; border:1px solid transparent;
+    color:inherit; font:inherit; text-align:right; padding:2px 4px; border-radius:4px;
+  }
+  input:hover, input:focus { border-color:#333; outline:none; }
+  .foot { margin-top:24px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; color:var(--muted); font-size:12px; }
+  button {
+    background:transparent; border:1px solid #333; color:var(--fg);
+    border-radius:8px; padding:6px 12px; font:inherit; font-size:12px; cursor:pointer;
+  }
+  button:hover { border-color:#555; }
+  .note { margin-top:18px; color:var(--muted); font-size:12px; line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  
+  <h1>Wallet tracker</h1>
+  <div class="addr">5MefLSkN3mhKVe3gtXHnz2gjAkrkn6P5r9ufL4wi849r<br/>
+    <a href="https://solscan.io/account/5MefLSkN3mhKVe3gtXHnz2gjAkrkn6P5r9ufL4wi849r" target="_blank" rel="noopener">Solscan</a>
+  </div>
+
+  <div class="hero">
+    <div class="card">
+      <div class="lbl">Portfolio</div>
+      <div class="val" id="value">—</div>
+      <div class="hint">priced tokens + SOL</div>
+    </div>
+    <div class="card">
+      <div class="lbl">Cost</div>
+      <div class="val" id="cost">—</div>
+      <div class="hint">where avg is set</div>
+    </div>
+    <div class="card">
+      <div class="lbl">PnL</div>
+      <div class="val" id="pnl">—</div>
+      <div class="hint" id="pnlPct"></div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Asset</th>
+        <th class="r">Size</th>
+        <th class="r">Avg</th>
+        <th class="r">Mark</th>
+        <th class="r">Value</th>
+        <th class="r">PnL</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <div class="foot">
+    <button onclick="refresh()">Refresh marks</button>
+    <button onclick="reset()">Reset</button>
+    <span id="asof"></span>
+  </div>
+  <h1 style="margin-top:28px">Recent activity (PT)</h1>
+  <div id="realized" class="note" style="margin-top:6px"></div>
+  <div id="activity" class="note" style="margin-top:6px"></div>
+  <p class="note">
+    Auto-atualizado por <code>update_5mef_page.py</code> a partir dos saldos on-chain (<span id="dataAsOf"></span>). Spam/illiquid (&lt;$10k liquidez) fica de fora.
+    Custo: ZCAT reconstruído on-chain; tokens novos = USDC gasto. ZEC sem custo conhecido nesta wallet → vendas contam só proceeds. Marks: Jupiter / DexScreener / Kraken (SOL).
+  </p>
+</div>
+<script>
+const OWNER = "5MefLSkN3mhKVe3gtXHnz2gjAkrkn6P5r9ufL4wi849r";
+/*DATA_START*/
+const DATA = {
+ "asOf": "2026-10-15 15:30:03 PT",
+ "positions": [
+  {
+   "id": "hcrlc9vd",
+   "symbol": "ZCAT",
+   "mint": "HcRLc9VDgjLeK154xDawfb1dmVJ98DoSqcwTHGqiDeJR",
+   "holdings": 4522239.000229279,
+   "mark": 0.05045155058479112,
+   "avg": 0.024831174519508583,
+   "lastBuy": {
+    "time": "2026-10-04 09:56:39",
+    "qty": 31384.45032028295,
+    "paid": 1331.165475,
+    "paidToken": "USDC",
+    "tx": "4StXeoePKDwVxibY9VibgtEhmCYJm2RwQKpKG1oQz4jHDkEVZYTzEkLhr48Rc18ZecUdrvnpBbr9iWEwsMLwKnWM",
+    "approx": false
+   }
+  },
+  {
+   "id": "a7bdiyds",
+   "symbol": "ZEC",
+   "mint": "A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS",
+   "holdings": 6.05742694,
+   "mark": 1109.9098111457265,
+   "avg": null,
+   "costUnknown": true,
+   "lastBuy": {
+    "time": "2026-10-03 20:18:55",
+    "qty": 2.44405359,
+    "paid": 3203.0,
+    "paidToken": "USDC",
+    "tx": "41TBuKTN2EZMNnyV7J5wevaM2Z9APmuubcimor7zxUzqyFpdjU8TDCoRBbUvvpR6JHRGVtjhYfESLna4kKqbNVtT",
+    "approx": false
+   }
+  },
+  {
+   "id": "4rbshw9h",
+   "symbol": "BAG",
+   "mint": "4RbsHw9H3EayjgfWXq2KaLvbREFua8wkER3gdLViLK3T",
+   "holdings": 3019047.028061,
+   "mark": 0.00011860992890090829,
+   "avg": 0.0002891693977157748,
+   "lastBuy": {
+    "time": "2026-10-03 00:47:39",
+    "qty": 106218.67167600011,
+    "paid": 18.85296078,
+    "paidToken": "SNDK",
+    "tx": "294qThLZRGZgio15EhMFbRYjvvSoRBkDFjPhBuPeqBPp7d8dr2hmmiYeUXzN6zi7NHB84m5XKPn6ZJexmSFmfZpx",
+    "approx": true
+   }
+  },
+  {
+   "id": "7wsyjrv3",
+   "symbol": "ZEC (7WsY)",
+   "mint": "7WsYjrv3ENVHNwHzRAmHtm96XppsFmhsP6oq136By1TC",
+   "holdings": 0.04865548,
+   "mark": 0,
+   "avg": null
+  },
+  {
+   "id": "sol",
+   "symbol": "SOL",
+   "mint": "So11111111111111111111111111111111111111112",
+   "holdings": 0.449061373,
+   "mark": 102.97,
+   "avg": null
+  },
+  {
+   "id": "usdc",
+   "symbol": "USDC",
+   "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "holdings": 1e-05,
+   "mark": 1.0,
+   "avg": null
+  }
+ ],
+ "activity": [
+  {
+   "time": "2026-10-12 13:42:39",
+   "sig": "5TiiFfcrV6b33nLjjZD92e55mUfMPWn2zDnXjDsh8s9e8TDXFbNCiufHg72jDcf97SWwBMnN4zMmjBeaHweTBKHJ",
+   "text": "Dust 0.00001 USDC (possible address poisoning — never copy the sender)"
+  },
+  {
+   "time": "2026-10-12 13:42:35",
+   "sig": "KrJPwfP6QB85dvfxzUQ9uT2iZ1nvsrKjD68DdJkWZZqvRyqm5SG5PMJZN14P6gLAp5ZUwCBDrsYqVAHD1KeaiCL",
+   "text": "Sent 958.366179 USDC → Binance (depósito da 5Mef) (token acct 41PkQT…3jAy)"
+  },
+  {
+   "time": "2026-10-12 13:42:18",
+   "sig": "aUWRmg8xbjanEoXa2LC5oukYha3uuMzv76Q3Qxemrb3nta7Ri5YecU4pMNVZGNUERvm29UfdwUuwHPhmNKvmYJW",
+   "text": "Swap 20,000 ZCAT → 958.366069 USDC"
+  },
+  {
+   "time": "2026-10-12 13:39:26",
+   "sig": "5aREAptmiB12koicUi5UkbHSeLcN4LizU3zYnix9QiPZoW7HqrX9nfWr1poBfTg5jZn6yf8jRnJMF9rQzF9wBTLV",
+   "text": "Dust 0.0001 USDC (possible address poisoning — never copy the sender)"
+  },
+  {
+   "time": "2026-10-12 13:39:24",
+   "sig": "2W1SsyYzuCZeikqjcDfwvaxNomb3hmt6AV2gc8wEkgEb7PVvSEBqgRYB4eJ3Ah62KkaGrtSM1oczxRHEdMaaoyB6",
+   "text": "Dust 0.00001 USDC (possible address poisoning — never copy the sender)"
+  },
+  {
+   "time": "2026-10-12 13:39:07",
+   "sig": "3nk78mf4kxJXJau1mq9EjtsLZeM2JfuRm1GUau4b4G58pQig6oqf6T37Nb4uH9G814mEdLAqsip5jykKeRtoRZC9",
+   "text": "Sent 3,667.136239 USDC → Binance (depósito da 5Mef) (token acct 41PkQT…3jAy)"
+  },
+  {
+   "time": "2026-10-12 13:38:38",
+   "sig": "2UiKiHRCRfreDTPpAgWXeqE8SesLdMiMNN418mxnSsibdMMUNNdSoF6sdJF7UwWXwVnPjVJsPbeMoJNp7EkuBiwX",
+   "text": "Swap 32,500 ZCAT → 1,575.925911 USDC"
+  },
+  {
+   "time": "2026-10-12 13:35:51",
+   "sig": "2ZKJW7v9aHHu4Hb63yAUdQNVU7JLyuZ3BGG4nSzfNebYDTYJ8WuhMg75T2pC9gQQLsM8bK3NHTEziK9qvP8kkNwN",
+   "text": "Swap 43,000 ZCAT → 2,091.210328 USDC"
+  },
+  {
+   "time": "2026-10-04 09:56:39",
+   "sig": "4StXeoePKDwVxibY9VibgtEhmCYJm2RwQKpKG1oQz4jHDkEVZYTzEkLhr48Rc18ZecUdrvnpBbr9iWEwsMLwKnWM",
+   "text": "Swap 1,331.165475 USDC → 31,384.45032 ZCAT (~$0.0424148/ZCAT)"
+  },
+  {
+   "time": "2026-10-04 09:52:13",
+   "sig": "58zSaMbcznHrbV7RkBn1RjW94A67UquD762VxEeoJifmKL9BbWTbNKRJpJxJjfjG3uBZ3eUNPY4fcEXzUC9mfW5U",
+   "text": "Swap 1,331.165474 USDC → 31,377.385369 ZCAT (~$0.0424244/ZCAT)"
+  },
+  {
+   "time": "2026-10-04 09:46:40",
+   "sig": "5j7pgk5dka2Ut6E5yH9yrZotprWcKW8yuCjDM9KSR8YpFKjAvZqbMmox7zheJcm979PrMV68PfbQjUZLFpdr9KgR",
+   "text": "Swap 2,662.330948 USDC → 62,668.800992 ZCAT (~$0.0424826/ZCAT)"
+  },
+  {
+   "time": "2026-10-04 09:46:25",
+   "sig": "31RzFyEgs6dUhakqTqD3Vsv3uopNfednvstcPFyX5nihNTE3YZ5bTYSdZ91b1FbmeEgtMY5eY1NnbZ6uuKQoTe5V",
+   "text": "Swap 4.017203 ZEC → 5,324.659697 USDC"
+  },
+  {
+   "time": "2026-10-03 20:54:33",
+   "sig": "3fuU5iCZ8kaZrcFujK1jonXW24NptpMYWaNZ2g1ywki8Z8UwQyLuYTAzJnmdgRZ5FAnW2YK6RrqvtBFtqSxd2yYP",
+   "text": "Dust 0.001 USDC (possible address poisoning — never copy the sender)"
+  },
+  {
+   "time": "2026-10-03 20:53:40",
+   "sig": "2CzLpDP3csoKfdmaYCtfzDiRdQHCYreLptNPUdhtD9FDDPSVp3CaLkdWbWzLtYUDYi7EUNGztsYBVuG1vb9Ruknh",
+   "text": "Dust 0.001 USDC (possible address poisoning — never copy the sender)"
+  },
+  {
+   "time": "2026-10-03 20:49:35",
+   "sig": "tRV3uV5u5augME665PTGsEc6qwjww7AKN5EMtPpKapsxqsjeGuucLYJN986SArxqHdEXeGF1DrAr5bVHqjpt3jK",
+   "text": "Dust 0.0001 USDC (possible address poisoning — never copy the sender)"
+  },
+  {
+   "time": "2026-10-03 20:49:29",
+   "sig": "5gYFUjz1QajtxbYHsmvRHHRyXuoVMUsR4iZUXQMmoCUmr9WibCmBBwuVQaaqiyDryDoZ5ziao6XuokUmrp59RbnN",
+   "text": "Dust 0.0001 USDC (possible address poisoning — never copy the sender)"
+  },
+  {
+   "time": "2026-10-03 20:49:16",
+   "sig": "5PAPXySBSWwtpDwsE3MEjJhhnoHzUPdNpJv8WqEqZjJf7Ec5UaRahHBYMFsMeFVVoLaAf6oq3CsJcdFWzLsgJwHz",
+   "text": "Sent 500.031865 USDC → token acct 9AV4WL…WGh3"
+  },
+  {
+   "time": "2026-10-03 20:48:36",
+   "sig": "4rjxQ6fxYV1visZKd1RTuMhziRF8mVN9vzefG3ojiBwhj9Qs3CBvsXvs4nRtYT7ubGKRyjndeM5Pkz8VrrafXcHD",
+   "text": "Dust 0.0001 USDC (possible address poisoning — never copy the sender)"
+  },
+  {
+   "time": "2026-10-03 20:48:19",
+   "sig": "2pTNs1x2U4K7oKiBtsqwWe4BtJcHk6yf3SCo41qKa2xnPUh5YzPC3ENTMVd9NxmtJttEVVfUNnjkLsc7JS4V3s2J",
+   "text": "Sent 8,263 USDC → token acct 41PkQT…3jAy"
+  },
+  {
+   "time": "2026-10-03 20:18:55",
+   "sig": "41TBuKTN2EZMNnyV7J5wevaM2Z9APmuubcimor7zxUzqyFpdjU8TDCoRBbUvvpR6JHRGVtjhYfESLna4kKqbNVtT",
+   "text": "Swap 3,203 USDC → 2.444054 ZEC (~$1310.53/ZEC)"
+  },
+  {
+   "time": "2026-10-03 15:14:06",
+   "sig": "2LWC4bvwsnMf6mDMGh49okx9jA1gGTAuwAfUVpxjPzdcLhGmLmpjkk1CKBzpb7H7aWqUjZGQpEMTfBZRGeszNRuB",
+   "text": "Swap 0.006488 SNDK → 11.119508 USDC"
+  },
+  {
+   "time": "2026-10-03 15:13:21",
+   "sig": "3Ec3DvN65ixURBgFEQQTAqHREztEWppVyz34qfKG64QXbGPuLm3WDR6a2H1puM8rna6e6bb4qPX5gW4D97DA7uPw",
+   "text": "Swap 962,084.751356 SNDK → 5,813.381778 USDC"
+  },
+  {
+   "time": "2026-10-03 15:08:32",
+   "sig": "2N5T7SHGh5r96CumvLLVWT1nDcfQbD196P4v59MK8wzJCyMbgVr6adAMQDzvP3LcmH9RQXMp73PQeYUtM7zkK3cq",
+   "text": "Swap 962,084.751356 SNDK → 6,141.529653 USDC"
+  },
+  {
+   "time": "2026-10-03 00:52:44",
+   "sig": "3GDe9bnMAGEXaKfRVTTYSGhmXHhbBRHwsfacGkZv6d3AuzJEAZz1XTxbSwBfK4vT83hjMx9iFwWdDtb6AYsJM6jS",
+   "text": "Received 485,000 BAG (zero cost)"
+  },
+  {
+   "time": "2026-10-03 00:47:39",
+   "sig": "294qThLZRGZgio15EhMFbRYjvvSoRBkDFjPhBuPeqBPp7d8dr2hmmiYeUXzN6zi7NHB84m5XKPn6ZJexmSFmfZpx",
+   "text": "Swap 0.010953 SNDK → 106,218.671676 BAG"
+  },
+  {
+   "time": "2026-10-03 00:33:05",
+   "sig": "5zmFdmco9j2A5oM2AAyb6jYbAuqmQ2uwBbBsuJvMgQha9iPKL8T3jLddLy1GzzWB1fBERRH29gdN22zEwobyw5X3",
+   "text": "Swap 0.3 ZEC → 1,299,714.150315 BAG"
+  },
+  {
+   "time": "2026-10-03 00:29:40",
+   "sig": "5mK1a5jdbXw2VEhWCj9BT9EjYJQjRhCaxu2qsh7yDxHSAjWvUw9SuiZdvA9DqFQsnau4KRLq4RwdNYckesigpV8Y",
+   "text": "Swap 0.35 ZEC → 1,094,641.451073 BAG"
+  },
+  {
+   "time": "2026-10-02 16:38:10",
+   "sig": "4Y3N6EqnBbkKDjwg9wpj3tKdgC6AHGg3AJQANGzjAZcjM8FHKJfYpJz7QR7Dzb5XnVpZexX9mDqg61dUY6vquymt",
+   "text": "Swap 0.019665 SNDK → 0.024734 ZEC"
+  },
+  {
+   "time": "2026-09-30 16:36:25",
+   "sig": "4UdsUL6FjLdSJ7TjUvxtPxXCGaAdrs7dKHA4MrB8AybC6tajuQFHckkDdhMV69GiS5mU6iG8Eoa2RAeuquRimxNT",
+   "text": "Received 0.011963 SOL (zero cost)"
+  },
+  {
+   "time": "2026-09-30 04:40:48",
+   "sig": "Ze8xf4kZyFz3jg92skJxE3Q5FHwUs5ZYJypnDxBZ7GC7rjL6rxB35xxqEyYfDARZEiZKjG3GfzZD7RQ4fDES7TJ",
+   "text": "Swap 0.009421 SNDK → 0.011491 ZEC"
+  }
+ ],
+ "realized": [
+  {
+   "time": "2026-09-26 11:02:56",
+   "sig": "4c4WDh5ZsQ7mLZBHUk4HqGEn15e8Pa5u1cN9MoF6iKvZu3EYdKDsD2UsoTiqVUXgzwUTaCqniz5tWhvWbYyeGEHm",
+   "symbol": "ZEC",
+   "mint": "A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS",
+   "qty": 2.2,
+   "proceeds": 3345.675631,
+   "cost": null,
+   "pnl": null,
+   "approx": false
+  },
+  {
+   "time": "2026-09-26 11:04:30",
+   "sig": "4EviWVCjuJbFsHB5E6KGx8rkSoXadsDyQg1EDy6UodxXUtiBoNJKaa9fV2oZpThMeQrYJfRq3tEM6QaTdt3hcKRL",
+   "symbol": "ZEC",
+   "mint": "A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS",
+   "qty": 0.87335569,
+   "proceeds": 1330.172796,
+   "cost": null,
+   "pnl": null,
+   "approx": false
+  },
+  {
+   "time": "2026-09-26 13:32:40",
+   "sig": "59AVMEu99BreAdhLZJvScqKpSqABHM7biEqZJrE9iSyj5FGArJDuD7qvxwM9LhvSeet9cXvSmyhujEubjttnoqjZ",
+   "symbol": "ZEC",
+   "mint": "A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS",
+   "qty": 1.0,
+   "proceeds": 1541.1368,
+   "cost": null,
+   "pnl": null,
+   "approx": false
+  },
+  {
+   "time": "2026-09-27 14:28:10",
+   "sig": "46kKToL3wyyEiayHggn6NXGqjD4RAyZhVs3BjZqDaX5k3SQHQBv2Lga5FsbSEiRuGf3XhsRVcmAdqEstGZYWh76Q",
+   "symbol": "SNDK",
+   "mint": "SNDKbwMUQvZhnLnxLduradgLHG5KrPuKwpnrkkGRhfH",
+   "qty": 0.061721,
+   "proceeds": 0.0,
+   "cost": null,
+   "pnl": null,
+   "approx": true
+  },
+  {
+   "time": "2026-09-27 14:28:42",
+   "sig": "5VyiamJy6CQfG1YGBayF9JJijLXGu4bsccfxmFC25aqfS6hMasPnCcFsvH1EiuVwM2sqe8o7pJcPhLZQjg4bxG3Z",
+   "symbol": "SPCXx",
+   "mint": "Xs3oZwbHvqis4NYcf4YKWmEia2eC84wSiVrcYcTqpH8",
+   "qty": 0.36190461,
+   "proceeds": 0.0,
+   "cost": null,
+   "pnl": null,
+   "approx": true
+  },
+  {
+   "time": "2026-09-27 21:15:52",
+   "sig": "4umfD5SAZnagZeCS8Q4NBMPYE8FH6mqfHk8qJSD4P6vEAhokAstsCJDUqjCNTAKqg1xToi57nZFBiesExJcGSBUF",
+   "symbol": "GROK",
+   "mint": "6HU4CmRb15C2nQDx8Ld2f2W2wTdmog6aZiiXdrT5Pzi8",
+   "qty": 1057365.583891,
+   "proceeds": 3204.984564,
+   "cost": 3345.675631,
+   "pnl": -140.6910670000002,
+   "approx": false
+  },
+  {
+   "time": "2026-09-27 21:21:47",
+   "sig": "5qfrxG1MSayjVEiDJEom7TH3e9N22WtBkpbdNd66ec1u4g1QEmA8zMmf4YX7TUagPXHRAtS133EpchnLACYkGnJs",
+   "symbol": "SPCXx",
+   "mint": "Xs3oZwbHvqis4NYcf4YKWmEia2eC84wSiVrcYcTqpH8",
+   "qty": 0.09023265,
+   "proceeds": 13.39765000000034,
+   "cost": null,
+   "pnl": null,
+   "approx": false
+  },
+  {
+   "time": "2026-09-28 21:54:13",
+   "sig": "nELUsa91S4zaBssTzLEeeGfMWmop7rt3GXRny4HgiYErNmFhKj5VDBti239edPgMPLXMoP3vN2GmSCRL5CGQ9P2",
+   "symbol": "SNDK",
+   "mint": "SNDKbwMUQvZhnLnxLduradgLHG5KrPuKwpnrkkGRhfH",
+   "qty": 0.085949,
+   "proceeds": 146.601986,
+   "cost": null,
+   "pnl": null,
+   "approx": false
+  },
+  {
+   "time": "2026-09-29 16:42:39",
+   "sig": "2VkAsT9Nz2VAyi4MP5GhkBxaeyYUJHsUJgGGny4Z1LuF3tXAe8B3Mhxjmy3KR6UkdtdVujFjmFye7yNNiYSNxKfc",
+   "symbol": "SNDK",
+   "mint": "SNDKbwMUQvZhnLnxLduradgLHG5KrPuKwpnrkkGRhfH",
+   "qty": 0.034275,
+   "proceeds": 59.05761442250187,
+   "cost": null,
+   "pnl": null,
+   "approx": true
+  },
+  {
+   "time": "2026-09-30 00:57:12",
+   "sig": "36EfBV7ZPiCyXXKwXin98PpMpjDtbXwy8mfjPNXV4dUaDsMdk6noqRTxg39kExmY8uSenaiqkBNaBKmW8VEZtwbd",
+   "symbol": "SNDK",
+   "mint": "SNDKbwMUQvZhnLnxLduradgLHG5KrPuKwpnrkkGRhfH",
+   "qty": 0.051134,
+   "proceeds": 87.99087586,
+   "cost": null,
+   "pnl": null,
+   "approx": true
+  },
+  {
+   "time": "2026-09-30 04:40:48",
+   "sig": "Ze8xf4kZyFz3jg92skJxE3Q5FHwUs5ZYJypnDxBZ7GC7rjL6rxB35xxqEyYfDARZEiZKjG3GfzZD7RQ4fDES7TJ",
+   "symbol": "SNDK",
+   "mint": "SNDKbwMUQvZhnLnxLduradgLHG5KrPuKwpnrkkGRhfH",
+   "qty": 0.009421,
+   "proceeds": 16.21156259,
+   "cost": null,
+   "pnl": null,
+   "approx": true
+  },
+  {
+   "time": "2026-10-02 16:38:10",
+   "sig": "4Y3N6EqnBbkKDjwg9wpj3tKdgC6AHGg3AJQANGzjAZcjM8FHKJfYpJz7QR7Dzb5XnVpZexX9mDqg61dUY6vquymt",
+   "symbol": "SNDK",
+   "mint": "SNDKbwMUQvZhnLnxLduradgLHG5KrPuKwpnrkkGRhfH",
+   "qty": 0.019665,
+   "proceeds": 33.848577899999995,
+   "cost": null,
+   "pnl": null,
+   "approx": true
+  },
+  {
+   "time": "2026-10-03 00:29:40",
+   "sig": "5mK1a5jdbXw2VEhWCj9BT9EjYJQjRhCaxu2qsh7yDxHSAjWvUw9SuiZdvA9DqFQsnau4KRLq4RwdNYckesigpV8Y",
+   "symbol": "ZEC",
+   "mint": "A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS",
+   "qty": 0.34999999999999964,
+   "proceeds": 459.9339499999995,
+   "cost": null,
+   "pnl": null,
+   "approx": true,
+   "note": "cost unknown (pre-ledger ZEC)"
+  },
+  {
+   "time": "2026-10-03 00:33:05",
+   "sig": "5zmFdmco9j2A5oM2AAyb6jYbAuqmQ2uwBbBsuJvMgQha9iPKL8T3jLddLy1GzzWB1fBERRH29gdN22zEwobyw5X3",
+   "symbol": "ZEC",
+   "mint": "A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS",
+   "qty": 0.2999999999999998,
+   "proceeds": 394.22909999999973,
+   "cost": null,
+   "pnl": null,
+   "approx": true,
+   "note": "cost unknown (pre-ledger ZEC)"
+  },
+  {
+   "time": "2026-10-03 00:47:39",
+   "sig": "294qThLZRGZgio15EhMFbRYjvvSoRBkDFjPhBuPeqBPp7d8dr2hmmiYeUXzN6zi7NHB84m5XKPn6ZJexmSFmfZpx",
+   "symbol": "SNDK",
+   "mint": "SNDKbwMUQvZhnLnxLduradgLHG5KrPuKwpnrkkGRhfH",
+   "qty": 0.010953,
+   "proceeds": 18.85296078,
+   "cost": null,
+   "pnl": null,
+   "approx": true
+  },
+  {
+   "time": "2026-10-03 15:08:32",
+   "sig": "2N5T7SHGh5r96CumvLLVWT1nDcfQbD196P4v59MK8wzJCyMbgVr6adAMQDzvP3LcmH9RQXMp73PQeYUtM7zkK3cq",
+   "symbol": "SNDK",
+   "mint": "8t5C4AWDg4CroMChxdo7rG2e8nJM31QG2GG7Czx9X7x2",
+   "qty": 962084.751356,
+   "proceeds": 6141.529653,
+   "cost": 1771.3708374695998,
+   "pnl": 4370.1588155304,
+   "approx": false
+  },
+  {
+   "time": "2026-10-03 15:13:21",
+   "sig": "3Ec3DvN65ixURBgFEQQTAqHREztEWppVyz34qfKG64QXbGPuLm3WDR6a2H1puM8rna6e6bb4qPX5gW4D97DA7uPw",
+   "symbol": "SNDK",
+   "mint": "8t5C4AWDg4CroMChxdo7rG2e8nJM31QG2GG7Czx9X7x2",
+   "qty": 962084.751356,
+   "proceeds": 5813.381778000001,
+   "cost": 1771.3708374695998,
+   "pnl": 4042.010940530401,
+   "approx": false
+  },
+  {
+   "time": "2026-10-03 15:14:06",
+   "sig": "2LWC4bvwsnMf6mDMGh49okx9jA1gGTAuwAfUVpxjPzdcLhGmLmpjkk1CKBzpb7H7aWqUjZGQpEMTfBZRGeszNRuB",
+   "symbol": "SNDK",
+   "mint": "SNDKbwMUQvZhnLnxLduradgLHG5KrPuKwpnrkkGRhfH",
+   "qty": 0.006488,
+   "proceeds": 11.119507999999769,
+   "cost": null,
+   "pnl": null,
+   "approx": false
+  },
+  {
+   "time": "2026-10-04 09:46:25",
+   "sig": "31RzFyEgs6dUhakqTqD3Vsv3uopNfednvstcPFyX5nihNTE3YZ5bTYSdZ91b1FbmeEgtMY5eY1NnbZ6uuKQoTe5V",
+   "symbol": "ZEC",
+   "mint": "A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS",
+   "qty": 4.017203309999999,
+   "proceeds": 5324.659697,
+   "cost": null,
+   "pnl": null,
+   "approx": false
+  },
+  {
+   "time": "2026-10-12 13:35:51",
+   "sig": "2ZKJW7v9aHHu4Hb63yAUdQNVU7JLyuZ3BGG4nSzfNebYDTYJ8WuhMg75T2pC9gQQLsM8bK3NHTEziK9qvP8kkNwN",
+   "symbol": "ZCAT",
+   "mint": "HcRLc9VDgjLeK154xDawfb1dmVJ98DoSqcwTHGqiDeJR",
+   "qty": 43000.0,
+   "proceeds": 2091.210328,
+   "cost": 1067.7543491675979,
+   "pnl": 1023.4559788324023,
+   "approx": false
+  },
+  {
+   "time": "2026-10-12 13:38:38",
+   "sig": "2UiKiHRCRfreDTPpAgWXeqE8SesLdMiMNN418mxnSsibdMMUNNdSoF6sdJF7UwWXwVnPjVJsPbeMoJNp7EkuBiwX",
+   "symbol": "ZCAT",
+   "mint": "HcRLc9VDgjLeK154xDawfb1dmVJ98DoSqcwTHGqiDeJR",
+   "qty": 32500.0,
+   "proceeds": 1575.9259109999998,
+   "cost": 807.0236359987657,
+   "pnl": 768.9022750012341,
+   "approx": false
+  },
+  {
+   "time": "2026-10-12 13:42:18",
+   "sig": "aUWRmg8xbjanEoXa2LC5oukYha3uuMzv76Q3Qxemrb3nta7Ri5YecU4pMNVZGNUERvm29UfdwUuwHPhmNKvmYJW",
+   "symbol": "ZCAT",
+   "mint": "HcRLc9VDgjLeK154xDawfb1dmVJ98DoSqcwTHGqiDeJR",
+   "qty": 20000.0,
+   "proceeds": 958.366069,
+   "cost": 496.6299298453943,
+   "pnl": 461.7361391546057,
+   "approx": false
+  }
+ ]
+};
+/*DATA_END*/
+const SEED = { asOf: DATA.asOf, positions: DATA.positions };
+const ACTIVITY = DATA.activity || [];
+const KEY = "wallet-5mef-v4";
+let state = load();
+function load() {
+  try { const raw = localStorage.getItem(KEY); if (raw) { const c = JSON.parse(raw); if (c.asOf === SEED.asOf) return c; } } catch {}
+  return structuredClone(SEED);
+}
+function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+function money(n,d=2) {
+  if (n==null || Number.isNaN(n)) return "—";
+  const neg=n<0; const s=Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
+  return (neg?"−":"")+"$"+s;
+}
+function qty(n) {
+  return n.toLocaleString("en-US",{maximumFractionDigits: n>=1000?2:4});
+}
+function cls(n) { return n>0?"up":n<0?"down":""; }
+
+function render() {
+  let totVal=0, totCost=0, totPnl=0, hasCost=false;
+  const tbody=document.getElementById("rows"); tbody.innerHTML="";
+  for (const p of state.positions) {
+    const value = p.holdings * (p.mark||0);
+    totVal += value;
+    let cost=null, pnl=null, pct=null;
+    if (p.avg!=null && Number.isFinite(p.avg)) {
+      cost = p.holdings * p.avg;
+      pnl = value - cost;
+      pct = cost ? (pnl/cost)*100 : 0;
+      totCost += cost; totPnl += pnl; hasCost = true;
+    }
+    const tr=document.createElement("tr");
+    tr.innerHTML = `
+      <td><div class="name">${p.symbol}</div><div class="venue">${p.mint.slice(0,4)}…${p.mint.slice(-4)}${p.lastBuy ? ` · last buy ${p.lastBuy.time.slice(5,16)} · ${qty(p.lastBuy.qty)} @ ${money(p.lastBuy.paid/p.lastBuy.qty,6)} · <a href="https://solscan.io/tx/${p.lastBuy.tx}" target="_blank" rel="noopener">tx</a>` : ""}</div></td>
+      <td class="r">${qty(p.holdings)}</td>
+      <td class="r"><input data-id="${p.id}" data-f="avg" value="${p.avg!=null?p.avg:''}" placeholder="—" /></td>
+      <td class="r"><input data-id="${p.id}" data-f="mark" value="${p.mark}" /></td>
+      <td class="r">${money(value)}</td>
+      <td class="r ${cls(pnl)}">${pnl!=null ? money(pnl)+' <span style="opacity:.65">('+pct.toFixed(1)+'%)</span>' : '<span style="color:#888">—</span>'}</td>`;
+    tbody.appendChild(tr);
+  }
+  tbody.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("change", () => {
+      const p = state.positions.find(x => x.id === inp.dataset.id);
+      const raw = String(inp.value).trim().replace(/,/g,"");
+      const n = raw==="" ? null : Number(raw);
+      if (inp.dataset.f==="avg") p.avg = (n==null || !Number.isFinite(n)) ? null : n;
+      else if (Number.isFinite(n)) p.mark = n;
+      save(); render();
+    });
+  });
+  document.getElementById("value").textContent = money(totVal);
+  document.getElementById("cost").textContent = hasCost ? money(totCost) : "—";
+  const pnlEl=document.getElementById("pnl");
+  if (hasCost) {
+    pnlEl.textContent = money(totPnl);
+    pnlEl.className = "val "+cls(totPnl);
+    document.getElementById("pnlPct").textContent = ((totPnl/totCost)*100).toFixed(1)+"% vs cost";
+  } else {
+    pnlEl.textContent = "—";
+    pnlEl.className = "val";
+    document.getElementById("pnlPct").textContent = "set avg buys for PnL";
+  }
+  const rz = DATA.realized || [];
+  const rKnown = rz.filter(r => r.pnl != null).reduce((a, r) => a + r.pnl, 0);
+  document.getElementById("realized").innerHTML = rz.length
+    ? `Realized: <b style="color:var(--fg)">${rz.some(r => r.pnl != null) ? money(rKnown) : "—"}</b>` +
+      rz.filter(r => r.pnl == null).map(r => ` · ${r.symbol} proceeds ${money(r.proceeds)} (cost unknown)`).join("")
+    : "";
+  document.getElementById("dataAsOf").textContent = DATA.asOf || "";
+  document.getElementById("activity").innerHTML = ACTIVITY.map(a =>
+    `<div>${a.time} · ${a.text} · <a href="https://solscan.io/tx/${a.sig}" target="_blank" rel="noopener">${a.sig.slice(0,6)}…${a.sig.slice(-4)}</a></div>`).join("");
+  document.getElementById("asof").textContent = "USD · "+new Date().toLocaleString();
+}
+
+function reset() { state=structuredClone(SEED); save(); render(); }
+
+async function refresh() {
+  try {
+    const mints = state.positions.map(p => p.mint).filter(m => !m.startsWith("So1111"));
+    const [solT, ...toks] = await Promise.all([
+      fetch("https://api.kraken.com/0/public/Ticker?pair=SOLUSD").then(r=>r.json()),
+      ...mints.map(m => fetch("https://lite-api.jup.ag/tokens/v2/search?query="+m).then(r=>r.json()).catch(()=>[])),
+    ]);
+    const sol = Number(solT?.result?.SOLUSD?.c?.[0]);
+    const byMint = {};
+    toks.forEach((arr,i) => {
+      const mint = mints[i];
+      const hit = (arr||[]).find(t => t.id===mint);
+      if (hit?.usdPrice) byMint[mint]=hit.usdPrice;
+    });
+    const missing = mints.filter(m => !byMint[m]);
+    if (missing.length) {
+      const ds = await fetch("https://api.dexscreener.com/latest/dex/tokens/"+missing.join(",")).then(r=>r.json());
+      for (const p of (ds.pairs||[])) {
+        const addr = p.baseToken?.address;
+        if (addr && p.priceUsd && !byMint[addr]) byMint[addr]=Number(p.priceUsd);
+      }
+    }
+    for (const p of state.positions) {
+      if (p.id==="sol" && sol) p.mark = sol;
+      else if (byMint[p.mint]) p.mark = byMint[p.mint];
+    }
+    save();
+  } catch(e) { console.warn(e); }
+  render();
+}
+refresh();
+</script>
+</body>
+</html>
