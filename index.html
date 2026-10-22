@@ -107,6 +107,8 @@
     <button onclick="reset()">Reset</button>
     <span id="asof"></span>
   </div>
+  <h1 style="margin-top:28px">Jupiter Perps (separado — não entra no total)</h1>
+  <div id="perps" class="note" style="margin-top:6px"></div>
   <h1 style="margin-top:28px">Recent activity (PT)</h1>
   <div id="realized" class="note" style="margin-top:6px"></div>
   <div id="activity" class="note" style="margin-top:6px"></div>
@@ -681,6 +683,12 @@ function render() {
     ? `Realized: <b style="color:var(--fg)">${rz.some(r => r.pnl != null) ? money(rKnown) : "—"}</b>` +
       rz.filter(r => r.pnl == null).map(r => ` · ${r.symbol} proceeds ${money(r.proceeds)} (cost unknown)`).join("")
     : "";
+  const pp = DATA.perps || [];
+  document.getElementById("perps").innerHTML = pp.length
+    ? pp.map(p => `<div><b style="color:var(--fg)">${p.side} ${p.asset}</b> ${p.leverage!=null?p.leverage.toFixed(1)+"x":""} · tamanho ${money(p.sizeUsd,0)} · colateral ${money(p.collateralUsd)} · entrada ${money(p.entry)} · mark ${p.mark!=null?money(p.mark):"—"} · ` +
+        `uPnL <span class="${cls(p.upnl)}">${p.upnl!=null?money(p.upnl):"—"}</span> · liq ≈ ${p.liq!=null?money(p.liq,0):"—"} · ` +
+        `<a href="https://solscan.io/account/${p.pubkey}" target="_blank" rel="noopener">${p.pubkey.slice(0,6)}…${p.pubkey.slice(-4)}</a></div>`).join("")
+    : (DATA.perpsChecked ? "Sem posições abertas." : "");
   document.getElementById("dataAsOf").textContent = DATA.asOf || "";
   document.getElementById("activity").innerHTML = ACTIVITY.map(a =>
     `<div>${a.time} · ${a.text} · <a href="https://solscan.io/tx/${a.sig}" target="_blank" rel="noopener">${a.sig.slice(0,6)}…${a.sig.slice(-4)}</a></div>`).join("");
